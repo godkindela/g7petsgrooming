@@ -1,0 +1,13 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allow known public analytics website id and docs placeholders"
+regexes = [
+  '''68ad8f83-9845-4fbe-b40c-77da13a99f6b''',
+  '''change-this-token'''
+]
+paths = [
+  '''README\.md''',
+  '''wrangler\.toml\.example'''
+]
