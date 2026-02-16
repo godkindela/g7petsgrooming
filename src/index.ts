@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 
 type Bindings = {
   Bindings: {
@@ -6,6 +7,7 @@ type Bindings = {
     GALLERY_BUCKET: R2Bucket;
     PUBLIC_BASE_URL?: string;
     MD_FOR_BOTS?: string;
+    ADMIN_TOKEN?: string;
   };
 };
 
@@ -69,6 +71,28 @@ type RenderContext = {
   services: ServiceContent[];
   faqs: FaqContent[];
   gallery: GalleryContent[];
+};
+
+type AdminImageRow = {
+  id: number;
+  r2Key?: string;
+  r2_key?: string;
+  thumbKey?: string;
+  thumb_key?: string;
+  title?: string;
+  title_en?: string;
+  title_zh?: string;
+  alt?: string;
+  alt_en?: string;
+  alt_zh?: string;
+  tagsJSON?: string;
+  tags_json?: string;
+  petType?: string;
+  pet_type?: string;
+  beforeAfter?: number;
+  before_after?: number;
+  is_published?: number;
+  featured?: number;
 };
 
 const app = new Hono<Bindings>();
@@ -149,6 +173,41 @@ function safeArrayJSON(input: string | null | undefined): string[] {
 
 function fallback(value?: string | null, fallbackValue = ''): string {
   return (value || '').trim() || fallbackValue;
+}
+
+function parseTagsInput(raw: string): string[] {
+  return raw
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+function boolFromForm(raw: FormDataEntryValue | null): number {
+  return raw === '1' || raw === 'on' || raw === 'true' ? 1 : 0;
+}
+
+function extFromFile(file: File): string {
+  const typeExt = (file.type || '').split('/')[1]?.toLowerCase();
+  if (typeExt && /^[a-z0-9]+$/.test(typeExt)) return typeExt === 'jpeg' ? 'jpg' : typeExt;
+  const nameExt = file.name.split('.').pop()?.toLowerCase();
+  if (nameExt && /^[a-z0-9]+$/.test(nameExt)) return nameExt;
+  return 'jpg';
+}
+
+function mediaKey(row: AdminImageRow): string {
+  return fallback(row.r2Key, fallback(row.r2_key));
+}
+
+function thumbKey(row: AdminImageRow): string {
+  return fallback(row.thumbKey, fallback(row.thumb_key));
+}
+
+function isAdminAuthenticated(c: any): boolean {
+  if (c.req.header('cf-access-authenticated-user-email')) return true;
+  const token = c.env.ADMIN_TOKEN || '';
+  if (!token) return false;
+  const session = getCookie(c, 'admin_session') || '';
+  return session === token;
 }
 
 function detectPreferMarkdown(c: any): boolean {
@@ -549,6 +608,7 @@ function renderHTML(c: any, ctx: RenderContext, aiAggregateMarkdown?: string): s
   <meta property="og:description" content="${escapeHtml(page.descriptionEn || page.summaryEn)}" />
   <meta property="og:url" content="${canonical(c, path)}" />
   <script type="application/ld+json">${localBusinessJsonLd(c, path, site)}</script>
+  <script defer src="https://umami.2z2z.org/script.js" data-website-id="68ad8f83-9845-4fbe-b40c-77da13a99f6b"></script>
   <style>
     body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.6;background:#f7f4ee;color:#4c5550}
     header{position:sticky;top:0;background:#fff;border-bottom:1px solid #e4ddd2}
@@ -632,6 +692,238 @@ app.get('/pricing.md', (c) => renderPage(c, 'pricing'));
 app.get('/faq.md', (c) => renderPage(c, 'faq'));
 app.get('/contact.md', (c) => renderPage(c, 'contact'));
 app.get('/ai.md', (c) => renderPage(c, 'ai'));
+
+function adminLayout(title: string, body: string): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>${escapeHtml(title)}</title>
+  <style>
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f7f4ee;color:#4c5550}
+    .wrap{max-width:1000px;margin:0 auto;padding:16px}
+    section,article{background:#fff;border:1px solid #e4ddd2;border-radius:14px;padding:16px;margin:12px 0}
+    h1,h2,h3{color:#2f3a34}
+    .grid{display:grid;gap:12px}
+    .cards{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+    input,button,textarea,select{width:100%;font:inherit;padding:10px;border-radius:10px;border:1px solid #d7c7b1}
+    button{background:#f4a261;border-color:#f4a261;color:#fff;font-weight:700;cursor:pointer}
+    .muted{color:#7b827d;font-size:14px}
+    img{max-width:100%;border-radius:10px;display:block}
+  </style>
+</head>
+<body><div class="wrap">${body}</div></body></html>`;
+}
+
+app.use('/admin/*', async (c, next) => {
+  const path = c.req.path;
+  if (path === '/admin/login' || path === '/admin/login/submit') return next();
+  if (!isAdminAuthenticated(c)) return c.redirect('/admin/login', 302);
+  return next();
+});
+
+app.get('/admin/login', (c) => {
+  const html = adminLayout(
+    'Admin Login',
+    `<section><h1>Admin Login</h1>
+      <p class="muted">Use ADMIN_TOKEN or Cloudflare Access header to access admin.</p>
+      <form method="post" action="/admin/login/submit" class="grid" style="max-width:420px">
+        <label>Token<input name="token" type="password" required /></label>
+        <button type="submit">Login</button>
+      </form></section>`
+  );
+  return new Response(html, { status: 200, headers: varyHeaders('text/html; charset=utf-8', 'private, max-age=0') });
+});
+
+app.post('/admin/login/submit', async (c) => {
+  const token = c.env.ADMIN_TOKEN || '';
+  if (!token) return c.text('ADMIN_TOKEN not configured', 500);
+  const form = await c.req.formData();
+  const submitted = fallback(form.get('token')?.toString());
+  if (submitted !== token) return c.text('Invalid token', 401);
+  setCookie(c, 'admin_session', token, { path: '/admin', httpOnly: true, secure: true, sameSite: 'Lax' });
+  return c.redirect('/admin/gallery', 302);
+});
+
+app.post('/admin/logout', (c) => {
+  deleteCookie(c, 'admin_session', { path: '/admin' });
+  return c.redirect('/admin/login', 302);
+});
+
+app.get('/admin/gallery', async (c) => {
+  const rows = await allRows<AdminImageRow>(
+    c.env.DB.prepare('SELECT * FROM gallery_images ORDER BY COALESCE(featured, 0) DESC, createdAt DESC, id DESC LIMIT 300')
+  );
+
+  const cards = rows
+    .map((r) => {
+      const id = Number(r.id || 0);
+      const titleEn = fallback(r.title_en, fallback(r.title, ''));
+      const titleZh = fallback(r.title_zh, titleEn);
+      const altEn = fallback(r.alt_en, fallback(r.alt, ''));
+      const altZh = fallback(r.alt_zh, altEn);
+      const tags = safeArrayJSON(r.tags_json || r.tagsJSON).join(', ');
+      const pType = fallback(r.pet_type, fallback(r.petType));
+      const beforeAfter = Number(r.before_after ?? r.beforeAfter ?? 0) ? 'checked' : '';
+      const isPublished = Number(r.is_published ?? 1) ? 'checked' : '';
+      const mKey = mediaKey(r);
+      const tKey = thumbKey(r);
+
+      return `<article>
+        <h3>#${id} ${escapeHtml(titleEn || 'Untitled')}</h3>
+        ${tKey ? `<img src="/thumb/${encodeURIComponent(tKey)}" alt="${escapeHtml(altEn)}" />` : ''}
+        <form method="post" action="/admin/gallery/update/${id}" class="grid">
+          <label>Title EN<input name="title_en" value="${escapeHtml(titleEn)}" required /></label>
+          <label>Title ZH<input name="title_zh" value="${escapeHtml(titleZh)}" /></label>
+          <label>Alt EN<input name="alt_en" value="${escapeHtml(altEn)}" required /></label>
+          <label>Alt ZH<input name="alt_zh" value="${escapeHtml(altZh)}" /></label>
+          <label>Tags (comma)<input name="tags" value="${escapeHtml(tags)}" /></label>
+          <label>Pet Type<input name="pet_type" value="${escapeHtml(pType)}" /></label>
+          <label><input type="checkbox" name="before_after" ${beforeAfter}/> Before/After</label>
+          <label><input type="checkbox" name="is_published" ${isPublished}/> Published</label>
+          <label><input type="checkbox" name="featured" ${Number(r.featured || 0) ? 'checked' : ''}/> Featured</label>
+          <p class="muted">Media key: ${escapeHtml(mKey)}<br/>Thumb key: ${escapeHtml(tKey)}</p>
+          <button type="submit">Update</button>
+        </form>
+        <form method="post" action="/admin/gallery/delete/${id}" style="margin-top:8px">
+          <button type="submit">Delete</button>
+        </form>
+      </article>`;
+    })
+    .join('');
+
+  const html = adminLayout(
+    'Gallery Admin',
+    `<section>
+      <h1>Gallery Admin</h1>
+      <p class="muted">Upload images, edit metadata, and control front-end gallery visibility.</p>
+      <form method="post" action="/admin/gallery/upload" enctype="multipart/form-data" class="grid">
+        <label>Image File<input type="file" name="image" accept="image/*" required /></label>
+        <label>Title EN<input name="title_en" required /></label>
+        <label>Title ZH<input name="title_zh" /></label>
+        <label>Alt EN<input name="alt_en" required /></label>
+        <label>Alt ZH<input name="alt_zh" /></label>
+        <label>Tags (comma)<input name="tags" /></label>
+        <label>Pet Type<input name="pet_type" placeholder="dog/cat" /></label>
+        <label><input type="checkbox" name="before_after" /> Before/After</label>
+        <label><input type="checkbox" name="featured" /> Featured</label>
+        <label><input type="checkbox" name="is_published" checked /> Published</label>
+        <button type="submit">Upload</button>
+      </form>
+      <form method="post" action="/admin/logout"><button type="submit">Logout</button></form>
+    </section>
+    <section><h2>Existing Images</h2><div class="cards">${cards || '<p>No images.</p>'}</div></section>`
+  );
+
+  return new Response(html, { status: 200, headers: varyHeaders('text/html; charset=utf-8', 'private, max-age=0') });
+});
+
+app.post('/admin/gallery/upload', async (c) => {
+  const form = await c.req.formData();
+  const image = form.get('image');
+  if (!(image instanceof File) || image.size === 0) return c.text('Image is required', 400);
+
+  const titleEn = fallback(form.get('title_en')?.toString(), 'Untitled');
+  const titleZh = fallback(form.get('title_zh')?.toString(), titleEn);
+  const altEn = fallback(form.get('alt_en')?.toString(), titleEn);
+  const altZh = fallback(form.get('alt_zh')?.toString(), altEn);
+  const tags = parseTagsInput(fallback(form.get('tags')?.toString()));
+  const petType = fallback(form.get('pet_type')?.toString(), 'pet');
+  const beforeAfter = boolFromForm(form.get('before_after'));
+  const featured = boolFromForm(form.get('featured'));
+  const isPublished = boolFromForm(form.get('is_published'));
+
+  const uid = crypto.randomUUID();
+  const ext = extFromFile(image);
+  const sourceKey = `gallery/original/${uid}.${ext}`;
+  const thumbKeyValue = `gallery/thumb/${uid}.${ext}`;
+  const bytes = await image.arrayBuffer();
+
+  await c.env.GALLERY_BUCKET.put(sourceKey, bytes, { httpMetadata: { contentType: image.type || 'application/octet-stream' } });
+  await c.env.GALLERY_BUCKET.put(thumbKeyValue, bytes, { httpMetadata: { contentType: image.type || 'application/octet-stream' } });
+
+  await c.env.DB.prepare(
+    `INSERT INTO gallery_images
+      (r2Key, thumbKey, title, alt, tagsJSON, petType, beforeAfter, featured, createdAt, title_en, title_zh, alt_en, alt_zh, tags_json, pet_type, before_after, is_published)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?)`
+  )
+    .bind(
+      sourceKey,
+      thumbKeyValue,
+      titleEn,
+      altEn,
+      JSON.stringify(tags),
+      petType,
+      String(beforeAfter),
+      String(featured),
+      titleEn,
+      titleZh,
+      altEn,
+      altZh,
+      JSON.stringify(tags),
+      petType,
+      String(beforeAfter),
+      String(isPublished)
+    )
+    .run();
+
+  return c.redirect('/admin/gallery', 302);
+});
+
+app.post('/admin/gallery/update/:id', async (c) => {
+  const id = c.req.param('id');
+  const form = await c.req.formData();
+  const titleEn = fallback(form.get('title_en')?.toString(), 'Untitled');
+  const titleZh = fallback(form.get('title_zh')?.toString(), titleEn);
+  const altEn = fallback(form.get('alt_en')?.toString(), titleEn);
+  const altZh = fallback(form.get('alt_zh')?.toString(), altEn);
+  const tags = parseTagsInput(fallback(form.get('tags')?.toString()));
+  const petType = fallback(form.get('pet_type')?.toString(), 'pet');
+  const beforeAfter = boolFromForm(form.get('before_after'));
+  const featured = boolFromForm(form.get('featured'));
+  const isPublished = boolFromForm(form.get('is_published'));
+
+  await c.env.DB.prepare(
+    `UPDATE gallery_images
+      SET title = ?, alt = ?, tagsJSON = ?, petType = ?, beforeAfter = ?, featured = ?,
+          title_en = ?, title_zh = ?, alt_en = ?, alt_zh = ?, tags_json = ?, pet_type = ?, before_after = ?, is_published = ?
+      WHERE id = ?`
+  )
+    .bind(
+      titleEn,
+      altEn,
+      JSON.stringify(tags),
+      petType,
+      String(beforeAfter),
+      String(featured),
+      titleEn,
+      titleZh,
+      altEn,
+      altZh,
+      JSON.stringify(tags),
+      petType,
+      String(beforeAfter),
+      String(isPublished),
+      id
+    )
+    .run();
+
+  return c.redirect('/admin/gallery', 302);
+});
+
+app.post('/admin/gallery/delete/:id', async (c) => {
+  const id = c.req.param('id');
+  const row = await firstRow<AdminImageRow>(c.env.DB.prepare('SELECT * FROM gallery_images WHERE id = ?').bind(id));
+  if (row) {
+    const mKey = mediaKey(row);
+    const tKey = thumbKey(row);
+    if (mKey) await c.env.GALLERY_BUCKET.delete(mKey);
+    if (tKey) await c.env.GALLERY_BUCKET.delete(tKey);
+  }
+  await c.env.DB.prepare('DELETE FROM gallery_images WHERE id = ?').bind(id).run();
+  return c.redirect('/admin/gallery', 302);
+});
 
 app.get('/robots.txt', (c) => {
   const body = `User-agent: *\nAllow: /\nAllow: /*.md\nDisallow: /admin/\nSitemap: ${baseUrl(c)}/sitemap.xml\n`;

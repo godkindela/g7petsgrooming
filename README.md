@@ -6,6 +6,9 @@ This Worker serves:
 
 - Browser users: SSR HTML
 - AI/bot/markdown clients: bilingual Markdown (EN + 中文)
+- Umami analytics script is injected in SSR HTML head:
+  - `https://umami.2z2z.org/script.js`
+  - `data-website-id="68ad8f83-9845-4fbe-b40c-77da13a99f6b"`
 
 Supported routes:
 
@@ -20,6 +23,21 @@ Supported routes:
 2. query has `?format=md` or `?md=1`
 3. `Accept` includes `text/markdown`
 4. User-Agent matches configured bot list and `MD_FOR_BOTS=1`
+
+## Admin Gallery (Upload & Manage)
+
+- Login route: `/admin/login`
+- Management route: `/admin/gallery`
+- Features:
+  - Upload image to R2
+  - Edit title/alt/tags/pet type/before-after/featured/published
+  - Delete image and corresponding R2 objects
+  - Front `/gallery` reads and shows published records
+
+Auth:
+
+- Preferred: Cloudflare Access header (`cf-access-authenticated-user-email`)
+- Fallback: set `ADMIN_TOKEN` and login with token form
 
 Bot list (case-insensitive):
 

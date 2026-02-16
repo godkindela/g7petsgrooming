@@ -6,6 +6,8 @@ workers_dev = true
 [vars]
 PUBLIC_BASE_URL = "https://www.g7pets.com.au"
 MD_FOR_BOTS = "1"
+# Optional for /admin token login fallback (or use Cloudflare Access header auth):
+# ADMIN_TOKEN = "change-this-token"
 
 [[d1_databases]]
 binding = "DB"
