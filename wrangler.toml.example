@@ -5,6 +5,7 @@ workers_dev = true
 
 [vars]
 PUBLIC_BASE_URL = "https://www.g7pets.com.au"
+MD_FOR_BOTS = "1"
 
 [[d1_databases]]
 binding = "DB"
@@ -16,6 +17,3 @@ migrations_dir = "migrations"
 binding = "GALLERY_BUCKET"
 bucket_name = "g7petsgrooming-gallery"
 preview_bucket_name = "g7petsgrooming-gallery-preview"
-
-# Optional fallback auth if Cloudflare Access is not enabled
-# ADMIN_TOKEN is best set with: wrangler secret put ADMIN_TOKEN

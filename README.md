@@ -1,133 +1,159 @@
-# G7 Pets Grooming (Cloudflare Workers SSR)
+# g7pets.com.au Cloudflare Worker (HTML + Bilingual Markdown)
 
-A Cloudflare Workers SSR website for `g7pets.com.au` with SEO-ready pages, dynamic sitemap/robots, D1-backed gallery metadata, and R2-backed image storage.
+## Overview
 
-## Stack
+This Worker serves:
 
-- Cloudflare Workers + Wrangler
-- Hono (SSR HTML routing)
-- D1 (gallery metadata)
-- R2 (original and thumbnail images)
+- Browser users: SSR HTML
+- AI/bot/markdown clients: bilingual Markdown (EN + 中文)
 
-## Delivered Features
+Supported routes:
 
-- SSR pages: `/`, `/services`, `/gallery`, `/pricing`, `/faq`, `/contact`
-- SEO on each page: `title`, `meta description`, `canonical`, OpenGraph tags
-- JSON-LD on each page (`ProfessionalService`)
-- NAP + opening hours on homepage and contact page
-- `GET /robots.txt` and `GET /sitemap.xml`
-- Admin gallery CMS: upload/edit/delete with alt required
-- Gallery filtering: `petType`, `beforeAfter`, `tag`; pagination and lazy-loading
-- `/admin/*` protected by Cloudflare Access header, with token fallback login
+- HTML: `/`, `/services`, `/gallery`, `/pricing`, `/faq`, `/contact`, `/ai`
+- Markdown: `/index.md`, `/services.md`, `/gallery.md`, `/pricing.md`, `/faq.md`, `/contact.md`, `/ai.md`
 
-## Project Structure
+## Output Negotiation
 
-- `src/index.ts`: all Worker routes and SSR rendering
-- `migrations/0001_init.sql`: D1 schema migration
-- `wrangler.toml.example`: Cloudflare binding example
+`detectPreferMarkdown()` returns Markdown when any condition matches:
 
-## Local Development
+1. URL ends with `.md`
+2. query has `?format=md` or `?md=1`
+3. `Accept` includes `text/markdown`
+4. User-Agent matches configured bot list and `MD_FOR_BOTS=1`
 
-1. Install dependencies:
+Bot list (case-insensitive):
+
+- Googlebot, Bingbot, DuckDuckBot, Applebot, YandexBot, Baiduspider
+- GPTBot, ChatGPT-User, OpenAI, ClaudeBot, anthropic, PerplexityBot
+- CCBot, Bytespider, Amazonbot, facebookexternalhit, twitterbot
+
+## Required Headers
+
+HTML responses:
+
+- `Content-Type: text/html; charset=utf-8`
+- `Cache-Control: public, max-age=300`
+- `Vary: Accept, User-Agent`
+
+Markdown responses:
+
+- `Content-Type: text/markdown; charset=utf-8`
+- `Cache-Control: public, max-age=600`
+- `Vary: Accept, User-Agent`
+
+## Data Source (D1)
+
+All content reads from D1 tables:
+
+- `pages`
+- `services`
+- `faq`
+- `gallery_images`
+
+The Worker supports bilingual columns and falls back to English when Chinese is missing.
+
+## Setup
 
 ```bash
 npm install
-```
-
-2. Create Wrangler config:
-
-```bash
 cp wrangler.toml.example wrangler.toml
 ```
 
-3. Create D1 database and update `database_id` in `wrangler.toml`:
+Create D1 and apply migrations:
 
 ```bash
 npx wrangler d1 create g7petsgrooming-db
-```
-
-4. Apply migration:
-
-```bash
 npx wrangler d1 migrations apply g7petsgrooming-db --local
 npx wrangler d1 migrations apply g7petsgrooming-db --remote
 ```
 
-5. Create R2 bucket(s):
+Create R2 bucket:
 
 ```bash
 npx wrangler r2 bucket create g7petsgrooming-gallery
 npx wrangler r2 bucket create g7petsgrooming-gallery-preview
 ```
 
-6. Set optional admin token fallback:
-
-```bash
-npx wrangler secret put ADMIN_TOKEN
-```
-
-7. Run locally:
+Run local:
 
 ```bash
 npm run dev
 ```
 
-## Deploy
+Deploy:
 
 ```bash
-npm run deploy
+wrangler publish
 ```
 
-## Admin Access Setup
+## robots.txt
 
-### Preferred: Cloudflare Access
+Generated from Worker route `/robots.txt`:
 
-1. In Cloudflare Zero Trust, create an Access Application for path `/admin/*`.
-2. Allow only your admin identities (email/group).
-3. Keep app auth middleware as-is; it trusts `cf-access-authenticated-user-email`.
+```txt
+User-agent: *
+Allow: /
+Allow: /*.md
+Disallow: /admin/
+Sitemap: https://www.g7pets.com.au/sitemap.xml
+```
 
-### MVP fallback: token login
+## sitemap.xml
 
-- Set `ADMIN_TOKEN` secret.
-- Visit `/admin/login`, enter token.
-- Session cookie allows access to `/admin/gallery`.
+Generated from Worker route `/sitemap.xml` and includes:
 
-## Acceptance Verification
+- `/`
+- `/services` `/services.md`
+- `/gallery` `/gallery.md`
+- `/pricing` `/pricing.md`
+- `/faq` `/faq.md`
+- `/contact` `/contact.md`
+- `/ai` `/ai.md`
 
-### SSR check
+## Self-test Commands (curl)
 
 ```bash
-curl -s https://<your-domain>/ | head -n 60
-curl -s https://<your-domain>/contact | head -n 80
+# HTML
+curl -I https://yourdomain/services
+
+# Markdown by suffix
+curl -I https://yourdomain/services.md
+
+# Markdown by bot UA
+curl -I -A "GPTBot" https://yourdomain/services
+
+# Markdown by Accept
+curl -I -H "Accept: text/markdown" https://yourdomain/services
+
+# Markdown by query
+curl -I "https://yourdomain/services?format=md"
+
+# Vary header
+curl -I https://yourdomain/services | rg -i '^vary:'
+
+# robots
+curl -s https://yourdomain/robots.txt
+
+# sitemap
+curl -s https://yourdomain/sitemap.xml
+
+# ai aggregate markdown
+curl -s https://yourdomain/ai.md | head -n 80
 ```
 
-Expected: complete text content visible in HTML source (not JS-only rendering).
+## Code Modules
 
-### SEO endpoints
+Implemented as required:
 
-```bash
-curl -s https://<your-domain>/robots.txt
-curl -s https://<your-domain>/sitemap.xml
-```
+- `detectPreferMarkdown()`
+- `renderHTML()`
+- `renderMarkdown()`
+- `renderAiAggregate()`
 
-### Admin protection
+## Files Delivered
 
-```bash
-curl -I https://<your-domain>/admin/gallery
-```
-
-Expected: `302` to `/admin/login` (or Access challenge), not public content.
-
-### JSON-LD presence
-
-```bash
-curl -s https://<your-domain>/ | rg "application/ld\+json"
-```
-
-### Gallery filtering
-
-```bash
-curl -s "https://<your-domain>/gallery?petType=dog&beforeAfter=true&tag=style" | head -n 120
-```
-
-Expected: filtered gallery HTML with image cards.
+- Worker source: `src/index.ts`
+- D1 schema/migrations: `migrations/*.sql`
+- Worker config: `wrangler.toml.example`
+- robots/sitemap: runtime routes
+- This README
