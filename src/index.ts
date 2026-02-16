@@ -700,20 +700,103 @@ function adminLayout(title: string, body: string): string {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>${escapeHtml(title)}</title>
+  <script defer src="https://umami.2z2z.org/script.js" data-website-id="68ad8f83-9845-4fbe-b40c-77da13a99f6b"></script>
   <style>
-    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f7f4ee;color:#4c5550}
-    .wrap{max-width:1000px;margin:0 auto;padding:16px}
-    section,article{background:#fff;border:1px solid #e4ddd2;border-radius:14px;padding:16px;margin:12px 0}
-    h1,h2,h3{color:#2f3a34}
+    :root{
+      --bg:#f3f5f7;
+      --panel:#ffffff;
+      --line:#e7ebf0;
+      --text:#2f3a34;
+      --muted:#7e8998;
+      --blue:#4f71ef;
+      --blue-2:#738bf5;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text)}
+    .admin-shell{min-height:100vh;display:grid;grid-template-columns:260px 1fr;grid-template-rows:68px 1fr;grid-template-areas:"top top" "side main"}
+    .topbar{
+      grid-area:top;display:flex;align-items:center;justify-content:space-between;padding:0 20px;
+      background:linear-gradient(90deg,var(--blue),var(--blue-2));color:#fff;border-bottom:1px solid rgba(255,255,255,.18)
+    }
+    .brand{font-size:34px;line-height:1;font-weight:900;margin-right:10px}
+    .brand-row{display:flex;align-items:center;font-weight:700;font-size:36px}
+    .brand-row small{font-size:26px;font-weight:600;opacity:.95}
+    .top-actions{display:flex;gap:10px;align-items:center}
+    .chip{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.25);padding:8px 12px;border-radius:999px;font-size:12px}
+    .sidebar{grid-area:side;background:#fff;border-right:1px solid var(--line);padding:14px 10px;overflow:auto}
+    .menu-title{padding:10px 12px;font-size:12px;color:#93a1b2;text-transform:uppercase;letter-spacing:.08em}
+    .menu a{
+      display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:10px;text-decoration:none;color:#3d4754;
+      min-height:44px;font-weight:600;
+    }
+    .menu a.active{background:#eef3ff;color:#3a5fe8}
+    .menu .dot{width:8px;height:8px;border-radius:999px;background:#9fb1ff}
+    .menu-group{margin-top:8px}
+    .menu-parent{
+      display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:10px;background:#f6f8fc;color:#2f3a34;
+      font-weight:700;min-height:44px;
+    }
+    .submenu{margin:6px 0 0 14px;padding-left:10px;border-left:2px solid #e6ebf5}
+    .submenu a{font-weight:600;color:#4b5970}
+    .main{grid-area:main;padding:18px}
+    .wrap{max-width:1320px}
+    .welcome{
+      background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;
+      grid-template-columns:1fr auto;gap:12px;align-items:center
+    }
+    .stats{display:grid;grid-template-columns:repeat(3,90px);gap:14px}
+    .stats .n{font-size:26px;font-weight:700;text-align:center}
+    .stats .k{font-size:12px;color:var(--muted);text-align:center}
+    section,article{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin:12px 0}
+    h1,h2,h3{color:#232f3e;margin:.2rem 0 .6rem}
     .grid{display:grid;gap:12px}
-    .cards{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
-    input,button,textarea,select{width:100%;font:inherit;padding:10px;border-radius:10px;border:1px solid #d7c7b1}
-    button{background:#f4a261;border-color:#f4a261;color:#fff;font-weight:700;cursor:pointer}
-    .muted{color:#7b827d;font-size:14px}
-    img{max-width:100%;border-radius:10px;display:block}
+    .cards{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(310px,1fr))}
+    .toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px}
+    .muted{color:var(--muted);font-size:13px}
+    .thumb{max-width:100%;border-radius:10px;display:block;border:1px solid var(--line)}
+    form.grid{gap:10px}
+    label{display:grid;gap:6px;font-size:13px;color:#445161}
+    input,button,textarea,select{
+      width:100%;font:inherit;padding:10px 12px;border-radius:10px;border:1px solid #d8dee7;background:#fff
+    }
+    .inline{display:flex;gap:8px;align-items:center}
+    .inline input{width:auto}
+    button{background:#4f71ef;border-color:#4f71ef;color:#fff;font-weight:700;cursor:pointer;min-height:42px}
+    button.secondary{background:#fff;color:#354052;border-color:#d6deea}
+    .card-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+    .pill{display:inline-flex;padding:4px 8px;border-radius:999px;background:#eef3ff;color:#405ee6;font-size:12px;font-weight:600}
+    @media (max-width:980px){
+      .admin-shell{grid-template-columns:1fr;grid-template-rows:68px auto 1fr;grid-template-areas:"top" "side" "main"}
+      .sidebar{border-right:none;border-bottom:1px solid var(--line)}
+      .stats{grid-template-columns:repeat(3,76px)}
+    }
   </style>
 </head>
-<body><div class="wrap">${body}</div></body></html>`;
+<body>
+  <div class="admin-shell">
+    <header class="topbar">
+      <div class="brand-row"><span class="brand">e</span><div>EleAdminPlus <small>后台管理模板</small></div></div>
+      <div class="top-actions">
+        <span class="chip">用户一</span>
+        <span class="chip">☼</span>
+      </div>
+    </header>
+    <aside class="sidebar">
+      <div class="menu-title">功能模块</div>
+      <nav class="menu">
+        <a href="/admin/gallery" class="active"><span class="dot"></span>控制台</a>
+        <div class="menu-group">
+          <div class="menu-parent"><span class="dot"></span>图片管理</div>
+          <div class="submenu">
+            <a href="/admin/gallery#upload-section"><span class="dot"></span>添加图片</a>
+            <a href="/admin/gallery#existing-section"><span class="dot"></span>现有图片</a>
+          </div>
+        </div>
+      </nav>
+    </aside>
+    <main class="main"><div class="wrap">${body}</div></main>
+  </div>
+</body></html>`;
 }
 
 app.use('/admin/*', async (c, next) => {
@@ -726,9 +809,19 @@ app.use('/admin/*', async (c, next) => {
 app.get('/admin/login', (c) => {
   const html = adminLayout(
     'Admin Login',
-    `<section><h1>Admin Login</h1>
-      <p class="muted">Use ADMIN_TOKEN or Cloudflare Access header to access admin.</p>
-      <form method="post" action="/admin/login/submit" class="grid" style="max-width:420px">
+    `<section class="welcome">
+      <div>
+        <h1>欢迎，管理员</h1>
+        <p class="muted">请输入 ADMIN_TOKEN 登录后台（或通过 Cloudflare Access 自动授权）</p>
+      </div>
+      <div class="stats">
+        <div><div class="n">3</div><div class="k">项目数</div></div>
+        <div><div class="n">24</div><div class="k">待办项</div></div>
+        <div><div class="n">1689</div><div class="k">消息</div></div>
+      </div>
+    </section>
+    <section><h2>Admin Login</h2>
+      <form method="post" action="/admin/login/submit" class="grid" style="max-width:480px">
         <label>Token<input name="token" type="password" required /></label>
         <button type="submit">Login</button>
       </form></section>`
@@ -771,8 +864,11 @@ app.get('/admin/gallery', async (c) => {
       const tKey = thumbKey(r);
 
       return `<article>
-        <h3>#${id} ${escapeHtml(titleEn || 'Untitled')}</h3>
-        ${tKey ? `<img src="/thumb/${encodeURIComponent(tKey)}" alt="${escapeHtml(altEn)}" />` : ''}
+        <div class="card-head">
+          <h3>#${id} ${escapeHtml(titleEn || 'Untitled')}</h3>
+          <span class="pill">${Number(r.is_published ?? 1) ? 'Published' : 'Draft'}</span>
+        </div>
+        ${tKey ? `<img class="thumb" src="/thumb/${encodeURIComponent(tKey)}" alt="${escapeHtml(altEn)}" />` : ''}
         <form method="post" action="/admin/gallery/update/${id}" class="grid">
           <label>Title EN<input name="title_en" value="${escapeHtml(titleEn)}" required /></label>
           <label>Title ZH<input name="title_zh" value="${escapeHtml(titleZh)}" /></label>
@@ -780,14 +876,14 @@ app.get('/admin/gallery', async (c) => {
           <label>Alt ZH<input name="alt_zh" value="${escapeHtml(altZh)}" /></label>
           <label>Tags (comma)<input name="tags" value="${escapeHtml(tags)}" /></label>
           <label>Pet Type<input name="pet_type" value="${escapeHtml(pType)}" /></label>
-          <label><input type="checkbox" name="before_after" ${beforeAfter}/> Before/After</label>
-          <label><input type="checkbox" name="is_published" ${isPublished}/> Published</label>
-          <label><input type="checkbox" name="featured" ${Number(r.featured || 0) ? 'checked' : ''}/> Featured</label>
+          <label class="inline"><input type="checkbox" name="before_after" ${beforeAfter}/> Before/After</label>
+          <label class="inline"><input type="checkbox" name="is_published" ${isPublished}/> Published</label>
+          <label class="inline"><input type="checkbox" name="featured" ${Number(r.featured || 0) ? 'checked' : ''}/> Featured</label>
           <p class="muted">Media key: ${escapeHtml(mKey)}<br/>Thumb key: ${escapeHtml(tKey)}</p>
           <button type="submit">Update</button>
         </form>
         <form method="post" action="/admin/gallery/delete/${id}" style="margin-top:8px">
-          <button type="submit">Delete</button>
+          <button class="secondary" type="submit">Delete</button>
         </form>
       </article>`;
     })
@@ -795,9 +891,22 @@ app.get('/admin/gallery', async (c) => {
 
   const html = adminLayout(
     'Gallery Admin',
-    `<section>
-      <h1>Gallery Admin</h1>
-      <p class="muted">Upload images, edit metadata, and control front-end gallery visibility.</p>
+    `<section class="welcome">
+      <div>
+        <h1>早安，用户一，开始您一天的工作吧！</h1>
+        <p class="muted">Gallery 管理面板：上传图片、维护元数据、控制前台展示。</p>
+      </div>
+      <div class="stats">
+        <div><div class="n">${rows.length}</div><div class="k">图片总数</div></div>
+        <div><div class="n">${rows.filter((x) => Number(x.is_published ?? 1)).length}</div><div class="k">已发布</div></div>
+        <div><div class="n">${rows.filter((x) => Number(x.featured || 0)).length}</div><div class="k">精选</div></div>
+      </div>
+    </section>
+    <section id="upload-section">
+      <div class="toolbar">
+        <h2>上传新图片</h2>
+        <form method="post" action="/admin/logout"><button class="secondary" type="submit">Logout</button></form>
+      </div>
       <form method="post" action="/admin/gallery/upload" enctype="multipart/form-data" class="grid">
         <label>Image File<input type="file" name="image" accept="image/*" required /></label>
         <label>Title EN<input name="title_en" required /></label>
@@ -806,14 +915,13 @@ app.get('/admin/gallery', async (c) => {
         <label>Alt ZH<input name="alt_zh" /></label>
         <label>Tags (comma)<input name="tags" /></label>
         <label>Pet Type<input name="pet_type" placeholder="dog/cat" /></label>
-        <label><input type="checkbox" name="before_after" /> Before/After</label>
-        <label><input type="checkbox" name="featured" /> Featured</label>
-        <label><input type="checkbox" name="is_published" checked /> Published</label>
+        <label class="inline"><input type="checkbox" name="before_after" /> Before/After</label>
+        <label class="inline"><input type="checkbox" name="featured" /> Featured</label>
+        <label class="inline"><input type="checkbox" name="is_published" checked /> Published</label>
         <button type="submit">Upload</button>
       </form>
-      <form method="post" action="/admin/logout"><button type="submit">Logout</button></form>
     </section>
-    <section><h2>Existing Images</h2><div class="cards">${cards || '<p>No images.</p>'}</div></section>`
+    <section id="existing-section"><h2>Existing Images</h2><div class="cards">${cards || '<p>No images.</p>'}</div></section>`
   );
 
   return new Response(html, { status: 200, headers: varyHeaders('text/html; charset=utf-8', 'private, max-age=0') });
