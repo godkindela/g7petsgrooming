@@ -1,0 +1,20 @@
+{
+  "name": "g7petsgrooming",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "tsc --noEmit",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "hono": "^4.10.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260208.0",
+    "playwright": "^1.58.2",
+    "typescript": "^5.9.2",
+    "wrangler": "^4.45.2"
+  }
+}

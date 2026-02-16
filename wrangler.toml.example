@@ -1,0 +1,21 @@
+name = "g7petsgrooming"
+main = "src/index.ts"
+compatibility_date = "2026-02-16"
+workers_dev = true
+
+[vars]
+PUBLIC_BASE_URL = "https://www.g7pets.com.au"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "g7petsgrooming-db"
+database_id = "<YOUR_D1_DATABASE_ID>"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "GALLERY_BUCKET"
+bucket_name = "g7petsgrooming-gallery"
+preview_bucket_name = "g7petsgrooming-gallery-preview"
+
+# Optional fallback auth if Cloudflare Access is not enabled
+# ADMIN_TOKEN is best set with: wrangler secret put ADMIN_TOKEN
