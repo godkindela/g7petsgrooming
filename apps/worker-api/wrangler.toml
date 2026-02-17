@@ -4,55 +4,17 @@ compatibility_date = "2026-02-17"
 workers_dev = true
 
 [vars]
-APP_ENV = "dev"
-PUBLIC_UI_ORIGIN = "http://localhost:5174"
-ADMIN_UI_ORIGIN = "http://localhost:5173"
+APP_ENV = "prod"
+PUBLIC_UI_ORIGIN = "https://g7petsgrooming-public.pages.dev"
+ADMIN_UI_ORIGIN = "https://g7petsgrooming-admin.pages.dev"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "g7petsgrooming-db-dev"
+database_name = "g7petsgrooming-db"
 database_id = "086a7638-253d-4f1d-a979-0592dabb9acd"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
 binding = "GALLERY_BUCKET"
-bucket_name = "g7petsgrooming-gallery-dev"
-preview_bucket_name = "g7petsgrooming-gallery-dev-preview"
-
-[env.staging]
-name = "g7petsgrooming-api-staging"
-
-[env.staging.vars]
-APP_ENV = "staging"
-PUBLIC_UI_ORIGIN = "https://staging.g7pets-public.pages.dev"
-ADMIN_UI_ORIGIN = "https://staging.g7pets-admin.pages.dev"
-
-[[env.staging.d1_databases]]
-binding = "DB"
-database_name = "g7petsgrooming-db-staging"
-database_id = "<STAGING_D1_DATABASE_ID>"
-migrations_dir = "migrations"
-
-[[env.staging.r2_buckets]]
-binding = "GALLERY_BUCKET"
-bucket_name = "g7petsgrooming-gallery-staging"
-preview_bucket_name = "g7petsgrooming-gallery-staging-preview"
-
-[env.prod]
-name = "g7petsgrooming-api-prod"
-
-[env.prod.vars]
-APP_ENV = "prod"
-PUBLIC_UI_ORIGIN = "https://www.g7pets.com.au"
-ADMIN_UI_ORIGIN = "https://admin.g7pets.com.au"
-
-[[env.prod.d1_databases]]
-binding = "DB"
-database_name = "g7petsgrooming-db-prod"
-database_id = "<PROD_D1_DATABASE_ID>"
-migrations_dir = "migrations"
-
-[[env.prod.r2_buckets]]
-binding = "GALLERY_BUCKET"
-bucket_name = "g7petsgrooming-gallery-prod"
-preview_bucket_name = "g7petsgrooming-gallery-prod-preview"
+bucket_name = "g7petsgrooming-gallery"
+preview_bucket_name = "g7petsgrooming-gallery-preview"

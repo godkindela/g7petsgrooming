@@ -53,16 +53,9 @@ npm run build
 ```bash
 cd apps/worker-api
 npm run deploy
-npm run deploy:staging
-npm run deploy:prod
 ```
 
-To inject real D1 IDs into placeholders:
-
-```bash
-./scripts/configure-worker-env.sh staging <STAGING_D1_DATABASE_ID>
-./scripts/configure-worker-env.sh prod <PROD_D1_DATABASE_ID>
-```
+This project uses one D1 database for all deploys.
 
 ### Pages
 
@@ -94,7 +87,7 @@ Workflows:
 - `.github/workflows/ci.yml`
 - `.github/workflows/deploy-cloudflare.yml`
 
-`deploy-cloudflare.yml` is `workflow_dispatch` with `target_env=staging|prod`, and deploys:
+`deploy-cloudflare.yml` is `workflow_dispatch` and deploys:
 
 1. Worker (`apps/worker-api`)
 2. Public Pages (`apps/public-ui`)
@@ -103,13 +96,6 @@ Workflows:
 Required GitHub repository secrets:
 
 - `CLOUDFLARE_API_TOKEN`
-- `CLOUDFLARE_ACCOUNT_ID`
-- `CF_D1_DATABASE_ID_STAGING`
-- `CF_D1_DATABASE_ID_PROD`
-- `VITE_API_BASE_STAGING`
-- `VITE_API_BASE_PROD`
-- `CF_PAGES_PROJECT_PUBLIC`
-- `CF_PAGES_PROJECT_ADMIN`
 
 ## Smoke Tests
 
