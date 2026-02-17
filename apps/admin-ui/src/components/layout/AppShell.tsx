@@ -14,6 +14,9 @@ export function AppShell({ children }: PropsWithChildren) {
             <NavLink className={navClass} to="/docs">
               Docs
             </NavLink>
+            <NavLink className={navClass} to="/gallery">
+              Gallery
+            </NavLink>
             <NavLink className={navClass} to="/jobs">
               Jobs
             </NavLink>

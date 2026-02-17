@@ -16,6 +16,9 @@ export function Layout({ children }: PropsWithChildren) {
             <NavLink to="/" className={navClass} end>
               Home
             </NavLink>
+            <NavLink to="/gallery" className={navClass}>
+              Gallery
+            </NavLink>
             <NavLink to="/search" className={navClass}>
               Search
             </NavLink>

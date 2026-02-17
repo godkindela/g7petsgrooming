@@ -18,6 +18,30 @@ type TagAttachBody = {
   tags?: string[];
 };
 
+type GalleryRow = {
+  id: number;
+  r2Key?: string;
+  r2_key?: string;
+  thumbKey?: string;
+  thumb_key?: string;
+  title_en?: string;
+  title_zh?: string;
+  alt_en?: string;
+  alt_zh?: string;
+  title?: string;
+  alt?: string;
+  tags_json?: string;
+  tagsJSON?: string;
+  pet_type?: string;
+  petType?: string;
+  before_after?: number;
+  beforeAfter?: number;
+  featured?: number;
+  is_published?: number;
+  created_at?: string;
+  createdAt?: string;
+};
+
 const app = new Hono<App>();
 
 const ENTITY_MAP: Record<string, EntityConfig> = {
@@ -41,6 +65,49 @@ function toInt(raw: string | undefined, fallback: number, min: number, max: numb
 
 function like(raw: string): string {
   return `%${raw.trim()}%`;
+}
+
+function fallback(value: string | undefined | null, fallbackValue = ''): string {
+  const v = (value || '').trim();
+  return v || fallbackValue;
+}
+
+function parseTags(raw: string): string[] {
+  return raw
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+function safeTagsJSON(raw: string | undefined | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.filter((x) => typeof x === 'string');
+  } catch {
+    return [];
+  }
+  return [];
+}
+
+function boolNumFromForm(value: FormDataEntryValue | null): number {
+  return value === '1' || value === 'true' || value === 'on' ? 1 : 0;
+}
+
+function extFromFile(file: File): string {
+  const byType = (file.type || '').split('/')[1]?.toLowerCase();
+  if (byType && /^[a-z0-9]+$/.test(byType)) return byType === 'jpeg' ? 'jpg' : byType;
+  const byName = file.name.split('.').pop()?.toLowerCase();
+  if (byName && /^[a-z0-9]+$/.test(byName)) return byName;
+  return 'jpg';
+}
+
+function mediaKey(row: GalleryRow): string {
+  return fallback(row.r2Key, fallback(row.r2_key));
+}
+
+function thumbKey(row: GalleryRow): string {
+  return fallback(row.thumbKey, fallback(row.thumb_key));
 }
 
 function allowedOrigins(c: { env: Env }): string[] {
@@ -313,6 +380,175 @@ app.post('/api/tags/attach', async (c) => {
   }
 
   return c.json({ ok: true, docId, attached });
+});
+
+app.get('/api/gallery/images', async (c) => {
+  const published = c.req.query('published');
+  const limit = toInt(c.req.query('limit'), 60, 1, 300);
+  const offset = toInt(c.req.query('offset'), 0, 0, 5000);
+
+  const sql =
+    published === '1'
+      ? `SELECT * FROM gallery_images WHERE COALESCE(is_published,1)=1 ORDER BY COALESCE(featured,0) DESC, COALESCE(created_at,createdAt) DESC, id DESC LIMIT ? OFFSET ?`
+      : `SELECT * FROM gallery_images ORDER BY COALESCE(featured,0) DESC, COALESCE(created_at,createdAt) DESC, id DESC LIMIT ? OFFSET ?`;
+
+  const rows = await c.env.DB.prepare(sql).bind(limit, offset).all<GalleryRow>();
+  const origin = new URL(c.req.url).origin;
+  const items = (rows.results || []).map((row) => {
+    const tKey = thumbKey(row);
+    const mKey = mediaKey(row);
+    return {
+      id: Number(row.id),
+      title_en: fallback(row.title_en, fallback(row.title, 'Untitled')),
+      title_zh: fallback(row.title_zh, fallback(row.title_en, fallback(row.title, 'Untitled'))),
+      alt_en: fallback(row.alt_en, fallback(row.alt, '')),
+      alt_zh: fallback(row.alt_zh, fallback(row.alt_en, fallback(row.alt, ''))),
+      tags: safeTagsJSON(row.tags_json || row.tagsJSON),
+      pet_type: fallback(row.pet_type, fallback(row.petType, 'pet')),
+      before_after: Number(row.before_after ?? row.beforeAfter ?? 0),
+      featured: Number(row.featured ?? 0),
+      is_published: Number(row.is_published ?? 1),
+      created_at: fallback(row.created_at, fallback(row.createdAt)),
+      media_url: mKey ? `${origin}/api/media/${encodeURIComponent(mKey)}` : null,
+      thumb_url: tKey ? `${origin}/api/thumb/${encodeURIComponent(tKey)}` : null,
+      r2_key: mKey,
+      thumb_key: tKey
+    };
+  });
+
+  return c.json({ items, limit, offset });
+});
+
+app.post('/api/gallery/upload', async (c) => {
+  const form = await c.req.formData();
+  const image = form.get('image');
+  if (!(image instanceof File) || image.size === 0) return c.json({ error: 'image is required' }, 400);
+
+  const titleEn = fallback(form.get('title_en')?.toString(), 'Untitled');
+  const titleZh = fallback(form.get('title_zh')?.toString(), titleEn);
+  const altEn = fallback(form.get('alt_en')?.toString(), titleEn);
+  const altZh = fallback(form.get('alt_zh')?.toString(), altEn);
+  const tags = parseTags(fallback(form.get('tags')?.toString()));
+  const petType = fallback(form.get('pet_type')?.toString(), 'pet');
+  const beforeAfter = boolNumFromForm(form.get('before_after'));
+  const featured = boolNumFromForm(form.get('featured'));
+  const isPublished = boolNumFromForm(form.get('is_published'));
+
+  const uid = crypto.randomUUID();
+  const ext = extFromFile(image);
+  const sourceKey = `gallery/original/${uid}.${ext}`;
+  const thumbKeyValue = `gallery/thumb/${uid}.${ext}`;
+  const bytes = await image.arrayBuffer();
+
+  await c.env.GALLERY_BUCKET.put(sourceKey, bytes, { httpMetadata: { contentType: image.type || 'application/octet-stream' } });
+  await c.env.GALLERY_BUCKET.put(thumbKeyValue, bytes, {
+    httpMetadata: { contentType: image.type || 'application/octet-stream' }
+  });
+
+  const inserted = await c.env.DB.prepare(
+    `INSERT INTO gallery_images
+      (r2Key, thumbKey, title, alt, tagsJSON, petType, beforeAfter, featured, createdAt,
+       title_en, title_zh, alt_en, alt_zh, tags_json, pet_type, before_after, is_published, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+  )
+    .bind(
+      sourceKey,
+      thumbKeyValue,
+      titleEn,
+      altEn,
+      JSON.stringify(tags),
+      petType,
+      String(beforeAfter),
+      String(featured),
+      titleEn,
+      titleZh,
+      altEn,
+      altZh,
+      JSON.stringify(tags),
+      petType,
+      String(beforeAfter),
+      String(isPublished)
+    )
+    .run();
+
+  return c.json({ ok: true, id: inserted.meta.last_row_id });
+});
+
+app.post('/api/gallery/update/:id', async (c) => {
+  const id = c.req.param('id');
+  const form = await c.req.formData();
+
+  const titleEn = fallback(form.get('title_en')?.toString(), 'Untitled');
+  const titleZh = fallback(form.get('title_zh')?.toString(), titleEn);
+  const altEn = fallback(form.get('alt_en')?.toString(), titleEn);
+  const altZh = fallback(form.get('alt_zh')?.toString(), altEn);
+  const tags = parseTags(fallback(form.get('tags')?.toString()));
+  const petType = fallback(form.get('pet_type')?.toString(), 'pet');
+  const beforeAfter = boolNumFromForm(form.get('before_after'));
+  const featured = boolNumFromForm(form.get('featured'));
+  const isPublished = boolNumFromForm(form.get('is_published'));
+
+  await c.env.DB.prepare(
+    `UPDATE gallery_images
+     SET title = ?, alt = ?, tagsJSON = ?, petType = ?, beforeAfter = ?, featured = ?,
+         title_en = ?, title_zh = ?, alt_en = ?, alt_zh = ?, tags_json = ?, pet_type = ?, before_after = ?, is_published = ?
+     WHERE id = ?`
+  )
+    .bind(
+      titleEn,
+      altEn,
+      JSON.stringify(tags),
+      petType,
+      String(beforeAfter),
+      String(featured),
+      titleEn,
+      titleZh,
+      altEn,
+      altZh,
+      JSON.stringify(tags),
+      petType,
+      String(beforeAfter),
+      String(isPublished),
+      id
+    )
+    .run();
+
+  return c.json({ ok: true, id: Number(id) });
+});
+
+app.post('/api/gallery/delete/:id', async (c) => {
+  const id = c.req.param('id');
+  const row = await c.env.DB.prepare('SELECT * FROM gallery_images WHERE id = ?').bind(id).first<GalleryRow>();
+  if (row) {
+    const mKey = mediaKey(row);
+    const tKey = thumbKey(row);
+    if (mKey) await c.env.GALLERY_BUCKET.delete(mKey);
+    if (tKey) await c.env.GALLERY_BUCKET.delete(tKey);
+  }
+  await c.env.DB.prepare('DELETE FROM gallery_images WHERE id = ?').bind(id).run();
+  return c.json({ ok: true, id: Number(id) });
+});
+
+app.get('/api/media/:key', async (c) => {
+  const key = decodeURIComponent(c.req.param('key'));
+  const object = await c.env.GALLERY_BUCKET.get(key);
+  if (!object) return c.json({ error: 'Not found' }, 404);
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('cache-control', 'public, max-age=31536000, immutable');
+  return new Response(object.body, { status: 200, headers });
+});
+
+app.get('/api/thumb/:key', async (c) => {
+  const key = decodeURIComponent(c.req.param('key'));
+  const object = await c.env.GALLERY_BUCKET.get(key);
+  if (!object) return c.json({ error: 'Not found' }, 404);
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('cache-control', 'public, max-age=31536000, immutable');
+  return new Response(object.body, { status: 200, headers });
 });
 
 app.notFound((c) => {
