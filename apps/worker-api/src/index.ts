@@ -73,7 +73,7 @@ app.use('/api/*', async (c, next) => {
   if (c.req.method === 'OPTIONS') {
     if (!isOriginAllowed(c)) return c.json({ error: 'Origin not allowed' }, 403);
     applyCors(c);
-    return new Response(null, { status: 204 });
+    return c.body(null, 204);
   }
 
   if (!isOriginAllowed(c)) return c.json({ error: 'Origin not allowed' }, 403);
