@@ -1,177 +1,127 @@
-# g7pets.com.au Cloudflare Worker (HTML + Bilingual Markdown)
+# g7petsgrooming
 
-## Overview
+Cloudflare default SOP structure (Public + Admin + Worker API):
 
-This Worker serves:
+- `apps/public-ui` (Cloudflare Pages)
+- `apps/admin-ui` (Cloudflare Pages)
+- `apps/worker-api` (Cloudflare Worker, only `/api/*`)
+- `packages/shared` (types + API client)
+- `Docs/SOP.md`
+- `Docs/API_CONTRACT.md`
 
-- Browser users: SSR HTML
-- AI/bot/markdown clients: bilingual Markdown (EN + 中文)
-- Umami analytics script is injected in SSR HTML head:
-  - `https://umami.2z2z.org/script.js`
-  - `data-website-id="68ad8f83-9845-4fbe-b40c-77da13a99f6b"`
+## API Contract
 
-Supported routes:
+Implemented endpoints:
 
-- HTML: `/`, `/services`, `/gallery`, `/pricing`, `/faq`, `/contact`, `/ai`
-- Markdown: `/index.md`, `/services.md`, `/gallery.md`, `/pricing.md`, `/faq.md`, `/contact.md`, `/ai.md`
+- `GET /api/health`
+- `GET /api/search?q=&tag=&from=&to=&source=&type=doc|person|event&pageSize=`
+- `GET /api/docs?page=&pageSize=&tag=&from=&to=&source=`
+- `GET /api/docs/:id`
+- `GET /api/render/:id`
+- `GET /api/entities/:type`
+- `GET /api/entities/:type/:id`
+- `GET /api/relations?entityId=`
+- `POST /api/tags/attach` (supports bulk tags)
+- `GET /api/jobs`
+- `POST /api/jobs/reindex`
 
-## Output Negotiation
-
-`detectPreferMarkdown()` returns Markdown when any condition matches:
-
-1. URL ends with `.md`
-2. query has `?format=md` or `?md=1`
-3. `Accept` includes `text/markdown`
-4. User-Agent matches configured bot list and `MD_FOR_BOTS=1`
-
-## Admin Gallery (Upload & Manage)
-
-- Login route: `/admin/login`
-- Management route: `/admin/gallery`
-- Features:
-  - Upload image to R2
-  - Edit title/alt/tags/pet type/before-after/featured/published
-  - Delete image and corresponding R2 objects
-  - Front `/gallery` reads and shows published records
-
-Auth:
-
-- Preferred: Cloudflare Access header (`cf-access-authenticated-user-email`)
-- Fallback: set `ADMIN_TOKEN` and login with token form
-
-Bot list (case-insensitive):
-
-- Googlebot, Bingbot, DuckDuckBot, Applebot, YandexBot, Baiduspider
-- GPTBot, ChatGPT-User, OpenAI, ClaudeBot, anthropic, PerplexityBot
-- CCBot, Bytespider, Amazonbot, facebookexternalhit, twitterbot
-
-## Required Headers
-
-HTML responses:
-
-- `Content-Type: text/html; charset=utf-8`
-- `Cache-Control: public, max-age=300`
-- `Vary: Accept, User-Agent`
-
-Markdown responses:
-
-- `Content-Type: text/markdown; charset=utf-8`
-- `Cache-Control: public, max-age=600`
-- `Vary: Accept, User-Agent`
-
-## Data Source (D1)
-
-All content reads from D1 tables:
-
-- `pages`
-- `services`
-- `faq`
-- `gallery_images`
-
-The Worker supports bilingual columns and falls back to English when Chinese is missing.
-
-## Setup
+## Local Dev
 
 ```bash
 npm install
-cp wrangler.toml.example wrangler.toml
+
+# terminal 1: worker api
+npm run dev:api
+
+# terminal 2: admin ui (http://localhost:5173)
+npm run dev:admin
+
+# terminal 3: public ui (http://localhost:5174)
+npm run dev:public
 ```
 
-Create D1 and apply migrations:
+## Build
 
 ```bash
-npx wrangler d1 create g7petsgrooming-db
-npx wrangler d1 migrations apply g7petsgrooming-db --local
-npx wrangler d1 migrations apply g7petsgrooming-db --remote
+npm run build
 ```
 
-Create R2 bucket:
+## Deploy
+
+### Worker
 
 ```bash
-npx wrangler r2 bucket create g7petsgrooming-gallery
-npx wrangler r2 bucket create g7petsgrooming-gallery-preview
+cd apps/worker-api
+npm run deploy
+npm run deploy:staging
+npm run deploy:prod
 ```
 
-Run local:
+To inject real D1 IDs into placeholders:
 
 ```bash
-npm run dev
+./scripts/configure-worker-env.sh staging <STAGING_D1_DATABASE_ID>
+./scripts/configure-worker-env.sh prod <PROD_D1_DATABASE_ID>
 ```
 
-Deploy:
+### Pages
+
+Create two Pages projects:
+
+1. `apps/admin-ui`
+- build command: `npm run build`
+- output: `dist`
+- env vars:
+  - `VITE_API_BASE=<worker-url>`
+  - `ENV=dev|staging|prod`
+
+2. `apps/public-ui`
+- build command: `npm run build`
+- output: `dist`
+- env vars:
+  - `VITE_API_BASE=<worker-url>`
+  - `ENV=dev|staging|prod`
+
+Worker CORS vars in `apps/worker-api/wrangler.toml`:
+
+- `PUBLIC_UI_ORIGIN`
+- `ADMIN_UI_ORIGIN`
+
+### GitHub Actions (CI/CD)
+
+Workflows:
+
+- `.github/workflows/ci.yml`
+- `.github/workflows/deploy-cloudflare.yml`
+
+`deploy-cloudflare.yml` is `workflow_dispatch` with `target_env=staging|prod`, and deploys:
+
+1. Worker (`apps/worker-api`)
+2. Public Pages (`apps/public-ui`)
+3. Admin Pages (`apps/admin-ui`)
+
+Required GitHub repository secrets:
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CF_D1_DATABASE_ID_STAGING`
+- `CF_D1_DATABASE_ID_PROD`
+- `VITE_API_BASE_STAGING`
+- `VITE_API_BASE_PROD`
+- `CF_PAGES_PROJECT_PUBLIC`
+- `CF_PAGES_PROJECT_ADMIN`
+
+## Smoke Tests
 
 ```bash
-wrangler publish
+curl -sS http://127.0.0.1:8787/api/health
+curl -sS "http://127.0.0.1:8787/api/search?q=groom&type=doc"
+curl -sS "http://127.0.0.1:8787/api/docs?page=1&pageSize=5"
+curl -sS http://127.0.0.1:8787/api/docs/home
+curl -sS http://127.0.0.1:8787/api/render/home
+curl -sS "http://127.0.0.1:8787/api/entities/pages?limit=5"
+curl -sS "http://127.0.0.1:8787/api/relations?entityId=home"
+curl -sS http://127.0.0.1:8787/api/jobs
+curl -sS -X POST http://127.0.0.1:8787/api/tags/attach -H 'content-type: application/json' -d '{"docId":"home","tags":["landing","seo"]}'
+curl -sS -X POST http://127.0.0.1:8787/api/jobs/reindex -H 'content-type: application/json' -d '{"source":"smoke"}'
 ```
-
-## robots.txt
-
-Generated from Worker route `/robots.txt`:
-
-```txt
-User-agent: *
-Allow: /
-Allow: /*.md
-Disallow: /admin/
-Sitemap: https://www.g7pets.com.au/sitemap.xml
-```
-
-## sitemap.xml
-
-Generated from Worker route `/sitemap.xml` and includes:
-
-- `/`
-- `/services` `/services.md`
-- `/gallery` `/gallery.md`
-- `/pricing` `/pricing.md`
-- `/faq` `/faq.md`
-- `/contact` `/contact.md`
-- `/ai` `/ai.md`
-
-## Self-test Commands (curl)
-
-```bash
-# HTML
-curl -I https://yourdomain/services
-
-# Markdown by suffix
-curl -I https://yourdomain/services.md
-
-# Markdown by bot UA
-curl -I -A "GPTBot" https://yourdomain/services
-
-# Markdown by Accept
-curl -I -H "Accept: text/markdown" https://yourdomain/services
-
-# Markdown by query
-curl -I "https://yourdomain/services?format=md"
-
-# Vary header
-curl -I https://yourdomain/services | rg -i '^vary:'
-
-# robots
-curl -s https://yourdomain/robots.txt
-
-# sitemap
-curl -s https://yourdomain/sitemap.xml
-
-# ai aggregate markdown
-curl -s https://yourdomain/ai.md | head -n 80
-```
-
-## Code Modules
-
-Implemented as required:
-
-- `detectPreferMarkdown()`
-- `renderHTML()`
-- `renderMarkdown()`
-- `renderAiAggregate()`
-
-## Files Delivered
-
-- Worker source: `src/index.ts`
-- D1 schema/migrations: `migrations/*.sql`
-- Worker config: `wrangler.toml.example`
-- robots/sitemap: runtime routes
-- This README

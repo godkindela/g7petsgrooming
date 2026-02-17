@@ -1,0 +1,19 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #212831;
+  font-family: 'IBM Plex Sans', sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+.font-display {
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+body {
+  margin: 0;
+}

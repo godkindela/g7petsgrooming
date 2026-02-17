@@ -3,18 +3,21 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "wrangler dev",
-    "build": "tsc --noEmit",
-    "deploy": "wrangler deploy"
-  },
-  "dependencies": {
-    "hono": "^4.10.3"
+    "dev:admin": "npm --prefix apps/admin-ui run dev",
+    "dev:public": "npm --prefix apps/public-ui run dev",
+    "dev:api": "npm --prefix apps/worker-api run dev",
+    "build:admin": "npm --prefix apps/admin-ui run build",
+    "build:public": "npm --prefix apps/public-ui run build",
+    "build:api": "npm --prefix apps/worker-api run build",
+    "build": "npm run build:api && npm run build:admin && npm run build:public"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260208.0",
     "playwright": "^1.58.2",
-    "typescript": "^5.9.2",
-    "wrangler": "^4.45.2"
+    "typescript": "^5.9.2"
   }
 }

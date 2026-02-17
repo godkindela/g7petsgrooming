@@ -1,0 +1,133 @@
+name: Deploy Cloudflare Stack
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: Target environment
+        required: true
+        type: choice
+        options:
+          - staging
+          - prod
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build all
+        run: npm run build
+
+  deploy-worker:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Inject D1 database ID
+        shell: bash
+        run: |
+          if [ "${{ inputs.target_env }}" = "staging" ]; then
+            sed -i "s|<STAGING_D1_DATABASE_ID>|${{ secrets.CF_D1_DATABASE_ID_STAGING }}|g" apps/worker-api/wrangler.toml
+          else
+            sed -i "s|<PROD_D1_DATABASE_ID>|${{ secrets.CF_D1_DATABASE_ID_PROD }}|g" apps/worker-api/wrangler.toml
+          fi
+
+      - name: Deploy Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/worker-api
+          command: deploy --env ${{ inputs.target_env }}
+
+  deploy-public-ui:
+    runs-on: ubuntu-latest
+    needs: deploy-worker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Public UI
+        working-directory: apps/public-ui
+        env:
+          VITE_API_BASE: ${{ inputs.target_env == 'staging' && secrets.VITE_API_BASE_STAGING || secrets.VITE_API_BASE_PROD }}
+          ENV: ${{ inputs.target_env }}
+        run: npm run build
+
+      - name: Deploy Public UI to Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: >-
+            pages deploy apps/public-ui/dist
+            --project-name ${{ secrets.CF_PAGES_PROJECT_PUBLIC }}
+            --branch ${{ inputs.target_env == 'staging' && 'staging' || 'main' }}
+
+  deploy-admin-ui:
+    runs-on: ubuntu-latest
+    needs: deploy-worker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Admin UI
+        working-directory: apps/admin-ui
+        env:
+          VITE_API_BASE: ${{ inputs.target_env == 'staging' && secrets.VITE_API_BASE_STAGING || secrets.VITE_API_BASE_PROD }}
+          ENV: ${{ inputs.target_env }}
+        run: npm run build
+
+      - name: Deploy Admin UI to Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: >-
+            pages deploy apps/admin-ui/dist
+            --project-name ${{ secrets.CF_PAGES_PROJECT_ADMIN }}
+            --branch ${{ inputs.target_env == 'staging' && 'staging' || 'main' }}
