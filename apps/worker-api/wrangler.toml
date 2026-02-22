@@ -5,8 +5,9 @@ workers_dev = true
 
 [vars]
 APP_ENV = "prod"
-PUBLIC_UI_ORIGIN = "https://g7petsgrooming-public.pages.dev"
-ADMIN_UI_ORIGIN = "https://g7petsgrooming-admin.pages.dev"
+PUBLIC_UI_ORIGIN = "https://20200604.net"
+ADMIN_UI_ORIGIN = "https://admin.20200604.net"
+BOOKING_ADMIN_EMAIL = "godkin.dela@icloud.com,g7pets@gmail.com"
 
 [[d1_databases]]
 binding = "DB"

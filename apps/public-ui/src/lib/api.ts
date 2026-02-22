@@ -1,6 +1,6 @@
 import { createApiClient } from '@g7/shared';
 
-const baseUrl = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8787';
+const baseUrl = import.meta.env.VITE_API_BASE || 'https://g7petsgrooming-api.godkin.workers.dev';
 export const api = createApiClient(baseUrl);
 
 export type GalleryImage = {
@@ -27,6 +27,23 @@ export type BookingService = {
   price_cents: number;
 };
 
+export type ServiceCatalogItem = {
+  id: number;
+  name: string;
+  category: string;
+  subtitle: string;
+  summary: string;
+  details: string;
+  note: string;
+  duration_min: number;
+  price_cents: number;
+  sort_order: number;
+  is_active: number;
+  is_bookable: number;
+  features: string[];
+  pricing: Array<{ label: string; value: string }>;
+};
+
 export type BookingSlot = {
   id: number;
   start_at: string;
@@ -45,10 +62,29 @@ export type CreatedBooking = {
   service_name: string;
 };
 
+export type PublicWeekday = {
+  weekday: number;
+  is_enabled: number;
+};
+
 export async function fetchBookingServices(): Promise<BookingService[]> {
   const res = await fetch(`${baseUrl.replace(/\/$/, '')}/api/public/services`);
   if (!res.ok) throw new Error('Failed to fetch services');
   const data = (await res.json()) as { items: BookingService[] };
+  return data.items || [];
+}
+
+export async function fetchServiceCatalog(): Promise<ServiceCatalogItem[]> {
+  const res = await fetch(`${baseUrl.replace(/\/$/, '')}/api/public/services/catalog`);
+  if (!res.ok) throw new Error('Failed to fetch service catalog');
+  const data = (await res.json()) as { items: ServiceCatalogItem[] };
+  return data.items || [];
+}
+
+export async function fetchPublicWeekdays(): Promise<PublicWeekday[]> {
+  const res = await fetch(`${baseUrl.replace(/\/$/, '')}/api/public/availability/weekdays`);
+  if (!res.ok) throw new Error('Failed to fetch weekdays');
+  const data = (await res.json()) as { items: PublicWeekday[] };
   return data.items || [];
 }
 
